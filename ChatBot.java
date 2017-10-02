@@ -1,141 +1,97 @@
-import java.awt.Color;
-import java.awt.Font;
-import java.awt.Graphics;
-import java.awt.event.KeyEvent;
-import java.awt.event.KeyListener;
+package hacktober;
 
-import javax.swing.JFrame;
-import javax.swing.JPanel;
-import javax.swing.JScrollPane;
-import javax.swing.JTextArea;
-import java.lang.Math;
+import java.util.AbstractMap;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map.Entry;
+import java.util.Random;
 
-public class ChatBot extends JFrame implements KeyListener {
+//A generic chatbot class
+public class ChatBot {
+	private HashMap<Integer, Entry<TriggerEvent,ResponseEvent>> responses;
+	private ChatRoom room;
 	
-	JPanel p=new JPanel();
-	JTextArea dialog=new JTextArea(20,50);
-	JTextArea input=new JTextArea(1,50);
-	JScrollPane scroll=new JScrollPane(
-			dialog,
-			JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED,
-			JScrollPane.HORIZONTAL_SCROLLBAR_NEVER
-			);
-	@Override
-	public void paint(Graphics g)
-	{
-		super.paint(g);
-		Font f=new Font("Monotype Corsiva", Font.BOLD,40);
-		g.setColor(new Color(250,170,155));
-		g.setFont(f);
-		   g.drawString("CHAT  WITH  VIBS .....!",100,100);
-		   
-		   g.setColor(Color.GREEN);
+	public ChatBot(ChatRoom room) {
+		this.room = room;
+		responses = new HashMap<Integer, Entry<TriggerEvent,ResponseEvent>>();
 	}
 	
-	String [][] chatBot={
-			{"hi","hello"},
-			{"hi","hey"},
-			
-			{"how are you","how r u"},
-			{"doing well","good"},
-			
-			{"what are you doing"},
-			{"nothing","talking"},
-			
-			{"shut up","stop talking","NOOB","vibhav dont wanna talk"}
-	};
+	//This event is triggered if no TriggerEvent is triggered (null = nothing happens)
+	public ResponseEvent getDefaultResponse(String quote) {
+		return null;
+	}
+	//Room this bot is in
+	public ChatRoom getRoom() {
+		return room;
+	}
+	//Name of chatbot
+	public String getName() {
+		return "GenericChatBot";
+	}
 	
-	public static void main(String[] args) {
-	new ChatBot();
-
+	//Write Text line to chatroom
+	public void writeLine(String str) {
+		room.handleMessage(getName(), str);
 	}
-	 public ChatBot() {
-		super("CHAT WITH VIBS !");
-		setSize(600, 400);
-		setResizable(false);
-		setDefaultCloseOperation(EXIT_ON_CLOSE);
-		dialog.setEditable(false);
-		input.addKeyListener(this);
-		p.add(scroll);
-		p.add(input);
-		p.setBackground(new Color(250, 200, 0));
-		add(p);
-		setVisible(true);
+	//Create a new trigger/response pair with a given id
+	public void registerNewAction(int id, TriggerEvent trigger, ResponseEvent response) {
+		responses.put(id, new AbstractMap.SimpleEntry<TriggerEvent, ResponseEvent>(trigger, response));
 	}
-
-	@Override
-	public void keyPressed(KeyEvent e) {
-		if(e.getKeyCode()==KeyEvent.VK_ENTER)
-		{
-			input.setEditable(false);
-			String quote=input.getText();
-			input.setText("");
-			addText("-->ME:\t"+quote);
-			addText("\n");
-			quote=quote.trim();
-			while(
-					quote.charAt(quote.length()-1)=='!'||
-					quote.charAt(quote.length()-1)=='?'||
-				    quote.charAt(quote.length()-1)=='.')
-			{
-				quote=quote.substring(0,quote.length()-1);
+	
+	public void reactToQuote(String quote) {
+		for(Entry<TriggerEvent,ResponseEvent> e:responses.values()) {
+			//Check if one of the entries gets triggered
+			if(e.getKey() != null && e.getKey().triggered(this, getRoom(), quote)) {
+				if(e.getValue() != null)
+					e.getValue().trigger(this, getRoom(), quote);
+				return; //Stop after first activated TriggerEvent, remove this if you want to check for further triggered events
 			}
-			quote=quote.trim();
-			byte response=0;
-			int j=0;
-			while(response==0)
-			{
-				if(inArray(quote.toLowerCase(),chatBot[j*2]))
-				{
-					response=2;
-					int r=(int)Math.floor(Math.random()*chatBot[(j*2)+1].length);
-					addText("-->VIBS:\t"+chatBot[(j*2)+1][r]);
-				}
-				j++;
-				if(j*2==chatBot.length-1 && response==0)
-				{
-					response=1;
-				}
-			}
-			if(response==1)
-			{
-				int r=(int)Math.floor(Math.random()*chatBot[chatBot.length-1].length);
-				addText("-->VIBS:\t"+chatBot[chatBot.length-1][r]);
-			}
-			addText("\n");
 		}
-		
-	}
-
-	@Override
-	public void keyReleased(KeyEvent e) {
-		if(e.getKeyCode()==KeyEvent.VK_ENTER)
-		{
-			input.setEditable(true);
+		ResponseEvent def = getDefaultResponse(quote);
+		if(def!=null)
+			def.trigger(this, getRoom(), quote);
 			
+	}
+	
+	public static abstract class TriggerEvent {
+		public abstract boolean triggered(ChatBot subject, ChatRoom context, String quote);
+	}
+	public static abstract class ResponseEvent {
+		public abstract void trigger(ChatBot subject, ChatRoom context, String quote);
+	}
+	
+	public static class TriggerEventLine extends TriggerEvent {
+		private List<String> triggerLines;
+		public TriggerEventLine(List<String> triggerLines) {
+			this.triggerLines = triggerLines;
 		}
-		
-	}
-
-	@Override
-	public void keyTyped(KeyEvent e) {
-		// TODO Auto-generated method stub
-		
-	}
-	public void addText(String str)
-	{
-		dialog.setText(dialog.getText()+str);
-		
-	}
-	public boolean inArray(String in,String [] str)
-	{
-		boolean match=false;
-		for(int i=0;i<str.length;i++)
-			if(str[i].equals(in))
-			{
-				match=true;
+		public boolean triggered(ChatBot subject, ChatRoom context, String quote) {
+			//Remove punctuation from quote and trim
+			quote = quote.trim();
+			while (quote.charAt(quote.length() - 1) == '!'
+					|| quote.charAt(quote.length() - 1) == '?'
+					|| quote.charAt(quote.length() - 1) == '.') {
+				quote = quote.substring(0, quote.length() - 1);
 			}
-		return match;
+			quote = quote.trim();
+			//return true if the formated quote is equals to one of the lines
+			for(String line:triggerLines) {
+				if(quote.equalsIgnoreCase(line))
+					return true;
+			}
+			return false;
+		}
 	}
-
+	public static class ResponseEventLine extends ResponseEvent {
+		private List<String> responseLines;
+		private Random random;
+		public ResponseEventLine(List<String> list) {
+			this.responseLines = list;
+			this.random = new Random(); //seed this if you want more "randomness"
+		}
+		public void trigger(ChatBot subject, ChatRoom context, String quote) {
+			//Write a random string of the response lines
+			subject.writeLine(responseLines.get(random.nextInt(responseLines.size())));
+		}
+	}
 }
